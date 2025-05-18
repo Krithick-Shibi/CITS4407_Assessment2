@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Usage: ./empty_cells <filename> <separator>
+file="$1"
+sep="$2"
+
+if [[ ! -f "$file" ]]; then
+    echo "File not found: $file"
+    exit 1
+fi
+
+# Process using awk
+awk -v FS="$sep" '
+NR==1 {
+    for (i = 1; i <= NF; i++) {
+        headers[i] = $i
+        counts[i] = 0
+    }
+    num_fields = NF
+    next
+}
+{
+    for (i = 1; i <= num_fields; i++) {
+        # Trim leading/trailing spaces
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+        if ($i == "") {
+            counts[i]++
+        }
+    }
+}
+END {
+    for (i = 1; i <= num_fields; i++) {
+        print headers[i] ": " counts[i]
+    }
+}
+' "$file"
+
