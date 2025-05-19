@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Usage: ./preprocess <filename>
+input_file="$1"
+
+# Step 1: Print the header line with proper formatting
+header=$(head -n 1 "$input_file" | tr -d '\r' | tr ';' '\t')
+echo "$header"
+
+# Step 2: Clean the data and fix missing IDs
+tail -n +2 "$input_file" | \
+  tr -d '\r' | \
+  sed -E 's/([0-9]),([0-9])/\1.\2/g' | \
+  tr -cd '\11\12\15\40-\176\n' | \
+  awk -F';' '
+  BEGIN {
+    OFS = "\t";
+    max_id = 0;
+  }
+
+  {
+    # Save the original line
+    lines[NR] = $0;
+
+    # If the ID is numeric and greater than current max_id, update max_id
+    if ($1 ~ /^[0-9]+$/ && $1+0 > max_id) {
+      max_id = $1 + 0;
+    }
+  }
+
+  END {
+    new_id = max_id + 1;
+    for (i = 1; i <= NR; i++) {
+      split(lines[i], fields, ";");
+
+      # Replace missing ID with new one
+      if (fields[1] == "") {
+        fields[1] = new_id++;
+      }
+
+      # Reconstruct and print the cleaned line with tabs
+      output = fields[1];
+      for (j = 2; j <= length(fields); j++) {
+        output = output OFS fields[j];
+      }
+      print output;
+    }
+  }'
+
