@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Usage: ./analysis <cleaned_file.tsv>
+file="$1"
+
+if [[ ! -f "$file" ]]; then
+    echo "File not found: $file"
+    exit 1
+fi
+
+# Get column indices
+read -r header < "$file"
+IFS=$'\t' read -ra cols <<< "$header"
+
+for i in "${!cols[@]}"; do
+    case "${cols[$i]}" in
+        "Mechanics") mechanics_idx=$i ;;
+        "Domains") domains_idx=$i ;;
+        "Year Published") year_idx=$i ;;
+        "Rating Average") rating_idx=$i ;;
+        "Complexity Average") complexity_idx=$i ;;
+    esac
+done
+
+# 1. Count Mechanics and Domains
+tail -n +2 "$file" | awk -v FS='\t' -v midx=$((mechanics_idx+1)) -v didx=$((domains_idx+1)) '
+{
+    split($midx, mech, ", ")
+    for (i in mech) if (mech[i] != "") mech_count[mech[i]]++
+
+    split($didx, dom, ", ")
+    for (i in dom) if (dom[i] != "") dom_count[dom[i]]++
+}
+END {
+    for (m in mech_count) print mech_count[m], m | "sort -nr > tmp_mech.txt"
+    for (d in dom_count) print dom_count[d], d | "sort -nr > tmp_dom.txt"
+}
+'
+
+read -r mech_count mech < tmp_mech.txt
+read -r dom_count dom < tmp_dom.txt
+
+echo "The most popular game mechanics is $mech found in $mech_count games"
+echo "The most game domain is $dom found in $dom_count games"
+rm -f tmp_mech.txt tmp_dom.txt
+
+# 2. Pearson Correlation
+tail -n +2 "$file" | awk -v FS='\t' -v yidx=$((year_idx+1)) -v ridx=$((rating_idx+1)) -v cidx=$((complexity_idx+1)) '
+{
+    if ($yidx != "" && $ridx != "") {
+        y = $yidx + 0
+        r = $ridx + 0
+        n1++; sumX1+=y; sumY1+=r; sumXY1+=y*r; sumX1sq+=y^2; sumY1sq+=r^2
+    }
+    if ($cidx != "" && $ridx != "") {
+        x = $cidx + 0
+        r = $ridx + 0
+        n2++; sumX2+=x; sumY2+=r; sumXY2+=x*r; sumX2sq+=x^2; sumY2sq+=r^2
+    }
+}
+END {
+    r1 = (n1*sumXY1 - sumX1*sumY1) / sqrt((n1*sumX1sq - sumX1^2)*(n1*sumY1sq - sumY1^2))
+    r2 = (n2*sumXY2 - sumX2*sumY2) / sqrt((n2*sumX2sq - sumX2^2)*(n2*sumY2sq - sumY2^2))
+    printf "\nThe correlation between the year of publication and the average rating is %.3f\n", r1
+    printf "The correlation between the complexity of a game and its average rating is %.3f\n", r2
+}
+'
+
