@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# The preprocess script cleans and normalize semicolon-separated datasets
+# Usage = ./preprocess <filename.ectention> > <nex_filename.extention>
+# Steps:
+#   step 1 - Convert the semicolon separator to the  <tab> character
+#   step 2 - Convert the Microsoft line endings to Unix line endings
+#   step 3 - Change format of floating-point numbers to use "." rather than "," as the decimal point.
+#   step 4 - Deal with non-ASCII characters by deleting them from the output
+#   step 5 - While other empty cells can be ignored for now, new unique IDs need to be created for the 16 empty IDs
+
+# Input filename
+input_file="$1"
+
+# Step 1
+header=$(head -n 1 "$input_file" | tr -d '\r' | tr ';' '\t')
+echo "$header"
+
+# Step 2,3,4,5
+#   - Removing carriage returns (\r)
+#   - Replacing commas and with periods (e.g., 8,43 - 8.43)
+#   - Removing non-ASCII characters
+#   - Replacing empty IDs with unique new IDs
+tail -n +2 "$input_file" | \
+  tr -d '\r' | \
+
+  sed -E 's/([0-9]),([0-9])/\1.\2/g' | \
+
+  tr -cd '\11\12\15\40-\176\n' | \
+
+  awk -F';' '
+  BEGIN {
+    OFS = "\t";        
+    max_id = 0;        
+  }
+
+  {
+    line[NR] = $0;    # Saving each line
+
+    # If the first field (/ID) have valid number then update max_id
+    if ($1 ~ /^[0-9]+$/ && $1+0 > max_id) {
+      max_id = $1 + 0;
+    }
+  }
+
+  END {
+  new_id = max_id + 1;    # moving on to next IDs
+
+    for (i = 1; i <= NR; i++) {
+      # Seperting lines by semicolon into fields
+      split(line[i], field, ";");
+
+      # If the ID is empty then assign a new unique ID
+      if (field[1] == "") {
+        field[1] = new_id++;
+      }
+
+      # Printing the cleaned line with tab separators
+      output = field[1];
+      for (j = 2; j <= length(field); j++) {
+          output = output OFS field[j];
+      }
+      print output;
+    }
+  }'
+

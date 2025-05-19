@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# The empty_cells script counts the number of empty cells in each column of the file
+# Usage= ./empty_cells <filename> <separator_character>
+
+#   $1 - The input filename (e.g., bgg_dataset.txt)
+#   $2 - The separator character (e.g., ";" for semicolon)
+
+file="$1"
+separator="$2"
+
+# Check whether the file exists; if not exit with error
+if [[ ! -f "$file" ]]; then
+    echo "The file is not found: $file"
+    exit 1
+fi
+
+# Using awk to process the file
+# FS is the field separator acquired from the user
+awk -v FS="$separator" '
+# HEADER LINE
+NR == 1 {
+    # Initializing empty count for the headers
+    for (i = 1; i <= NF; i++) {
+        header[i] = $i       
+        count[i] = 0         
+    }
+    num_field = NF          
+    next                    
+}
+
+# DATA LINES
+{
+    for (i = 1; i <= num_field; i++) {
+        # Removing leading and trailing whitespace
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+
+        # Increment the count if the field is empty after trimmed
+        if ($i == "") {
+            count[i]++
+        }
+    }
+}
+
+# output
+END {
+    # Printing header with the count of its empty cells
+    for (i = 1; i <= num_field; i++) {
+        print header[i] ": " count[i]
+    }
+}
+' "$file"
+
